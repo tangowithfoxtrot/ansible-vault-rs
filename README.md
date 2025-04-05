@@ -2,10 +2,7 @@
 
 A fork of [ansible-vault-rs](https://github.com/tweedegolf/ansible-vault-rs) with a CLI.
 
-```toml
-[dependencies]
-ansible-vault = "0.2.1"
-```
+---
 
 Encrypt and decrypt Ansible Vault files
 
