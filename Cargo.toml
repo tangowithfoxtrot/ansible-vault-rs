@@ -17,3 +17,13 @@ aes-ctr = "0.6"
 block-padding = "0.2"
 hex = "0.4"
 rand = "0.8"
+clap = { version = "4.5.35", features = ["derive", "env"] }
+clap_complete = "4.5.47"
+anyhow = "1.0.97"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_yaml = "0.9.34"
+rpassword = "7.3.1"
+
+[[bin]]
+name = "a-vault"
+path = "src/cli/main.rs"
