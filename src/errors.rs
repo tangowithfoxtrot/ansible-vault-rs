@@ -1,4 +1,16 @@
-use aes_ctr::cipher::stream::InvalidKeyNonceLength;
+use aes::Aes256;
+use cipher::{InvalidLength, KeyIvInit, StreamCipher};
+use cipher::generic_array::GenericArray;
+use ctr::Ctr128BE;
+use block_padding::{Padding, Pkcs7};
+use hmac::{Hmac, Mac, NewMac};
+use pbkdf2::pbkdf2;
+use rand::Rng;
+use sha2::Sha256;
+use std::fs::File;
+use std::io::{BufRead, Read};
+use std::path::Path;
+
 use block_padding::{PadError, UnpadError};
 use hmac::crypto_mac::MacError;
 use std::error::Error;
@@ -121,8 +133,8 @@ impl From<UnpadError> for VaultError {
     }
 }
 
-impl From<InvalidKeyNonceLength> for VaultError {
-    fn from(error: InvalidKeyNonceLength) -> Self {
+impl From<InvalidLength> for VaultError {
+    fn from(error: InvalidLength) -> Self {
         VaultError::new(ErrorKind::InvalidFormat, &error.to_string())
     }
 }

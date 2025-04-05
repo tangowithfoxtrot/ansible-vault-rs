@@ -24,8 +24,10 @@ mod errors;
 
 pub use crate::errors::VaultError;
 use crate::errors::*;
-use aes_ctr::cipher::{NewStreamCipher, SyncStreamCipher};
-use aes_ctr::Aes256Ctr;
+use aes::Aes256;
+use cipher::{KeyIvInit, StreamCipher};
+use cipher::generic_array::GenericArray;
+use ctr::Ctr128BE;
 use block_padding::{Padding, Pkcs7};
 use hmac::{Hmac, Mac, NewMac};
 use pbkdf2::pbkdf2;
@@ -38,6 +40,8 @@ use std::path::Path;
 const VAULT_1_1_PREFIX: &str = "$ANSIBLE_VAULT;1.1;AES256";
 const AES_BLOCK_SIZE: usize = 16; // size in bytes
 const KEY_SIZE: usize = 32;
+
+type Aes256Ctr = Ctr128BE<Aes256>;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -113,8 +117,11 @@ pub fn decrypt<T: Read>(mut input: T, key: &str) -> Result<Vec<u8>> {
     verify_vault(key2, &ciphertext, &hmac_verify)?;
 
     // decrypt message
-    let mut cipher = Aes256Ctr::new_var(key1, iv)?;
+    let key_array = GenericArray::from_slice(key1);
+    let iv_array = GenericArray::from_slice(iv);
+    let mut cipher = Aes256Ctr::new(key_array, iv_array);
     cipher.apply_keystream(&mut ciphertext);
+
     let n = Pkcs7::unpad(&ciphertext)?.len();
     ciphertext.truncate(n);
 
@@ -219,11 +226,13 @@ pub fn encrypt<T: Read>(mut input: T, key: &str) -> Result<String> {
     let block_buffer = Pkcs7::pad(buffer.as_mut_slice(), pos, AES_BLOCK_SIZE)?;
 
     // Derive cryptographic keys
-    let salt = rand::thread_rng().gen::<[u8; 32]>();
+    let salt = rand::thread_rng().r#gen::<[u8; 32]>();
     let (key1, key2, iv) = &generate_derived_key(key, &salt);
 
     // Encrypt data
-    let mut cipher = Aes256Ctr::new_var(key1, iv)?;
+    let key_array = GenericArray::from_slice(key1);
+    let iv_array = GenericArray::from_slice(iv);
+    let mut cipher = Aes256Ctr::new(key_array, iv_array);
     cipher.apply_keystream(block_buffer);
 
     // Message authentication
