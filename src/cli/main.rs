@@ -8,7 +8,7 @@ use std::{
 };
 
 use ansible_vault::{decrypt_vault_from_file, encrypt_vault_from_file};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::{CommandFactory, Parser, Subcommand};
 
 /// Encryption/decryption utility for Ansible data files
@@ -133,7 +133,9 @@ fn main() -> Result<()> {
         match command {
             Commands::Completions { shell } => {
                 let Some(shell) = shell.or_else(clap_complete::Shell::from_env) else {
-                    bail!("Couldn't automatically detect the shell. Run `a-vault completions --help` for more info.");
+                    bail!(
+                        "Couldn't automatically detect the shell. Run `a-vault completions --help` for more info."
+                    );
                 };
 
                 let mut cmd = Cli::command();

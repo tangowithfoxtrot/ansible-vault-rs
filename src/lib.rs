@@ -25,15 +25,15 @@ mod errors;
 pub use crate::errors::VaultError;
 use crate::errors::*;
 use aes::Aes256;
-use aes::cipher::{KeyIvInit, StreamCipher};
 use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{KeyIvInit, StreamCipher};
+use block_padding::{Padding, Pkcs7, generic_array};
 use ctr::Ctr128BE;
-use block_padding::{generic_array, Padding, Pkcs7};
+use generic_array::typenum::U16;
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
 use rand::Rng;
 use sha2::Sha256;
-use generic_array::typenum::U16;
 use std::fs::File;
 use std::io::{BufRead, Read};
 use std::path::Path;
@@ -129,8 +129,10 @@ pub fn decrypt<T: Read>(mut input: T, key: &str) -> Result<Vec<u8>> {
     }
 
     // Convert ciphertext into blocks and unpad the last block
-    let last_block = GenericArray::<u8, U16>::from_slice(&ciphertext[ciphertext.len() - AES_BLOCK_SIZE..]);
-    let unpadded_last_block = Pkcs7::unpad(last_block).map_err(|_| VaultError::from_kind(ErrorKind::InvalidFormat))?;
+    let last_block =
+        GenericArray::<u8, U16>::from_slice(&ciphertext[ciphertext.len() - AES_BLOCK_SIZE..]);
+    let unpadded_last_block =
+        Pkcs7::unpad(last_block).map_err(|_| VaultError::from_kind(ErrorKind::InvalidFormat))?;
 
     // Combine unpadded last block with the rest of the ciphertext
     let mut unpadded_data = ciphertext[..ciphertext.len() - AES_BLOCK_SIZE].to_vec();

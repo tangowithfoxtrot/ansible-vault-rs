@@ -1,5 +1,5 @@
-use aes::cipher::inout::PadError;
 use aes::cipher::InvalidLength;
+use aes::cipher::inout::PadError;
 use block_padding::UnpadError;
 
 use hmac::digest::MacError;
@@ -98,7 +98,6 @@ impl From<hex::FromHexError> for VaultError {
         VaultError::new(ErrorKind::InvalidFormat, &error.to_string())
     }
 }
-
 
 impl From<MacError> for VaultError {
     fn from(error: MacError) -> Self {
