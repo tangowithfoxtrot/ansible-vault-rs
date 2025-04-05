@@ -1,18 +1,8 @@
-use aes::Aes256;
-use cipher::{InvalidLength, KeyIvInit, StreamCipher};
-use cipher::generic_array::GenericArray;
-use ctr::Ctr128BE;
-use block_padding::{Padding, Pkcs7};
-use hmac::{Hmac, Mac, NewMac};
-use pbkdf2::pbkdf2;
-use rand::Rng;
-use sha2::Sha256;
-use std::fs::File;
-use std::io::{BufRead, Read};
-use std::path::Path;
+use aes::cipher::inout::PadError;
+use aes::cipher::InvalidLength;
+use block_padding::UnpadError;
 
-use block_padding::{PadError, UnpadError};
-use hmac::crypto_mac::MacError;
+use hmac::digest::MacError;
 use std::error::Error;
 use std::fmt;
 
@@ -109,11 +99,6 @@ impl From<hex::FromHexError> for VaultError {
     }
 }
 
-impl From<hmac::crypto_mac::InvalidKeyLength> for VaultError {
-    fn from(error: hmac::crypto_mac::InvalidKeyLength) -> Self {
-        VaultError::new(ErrorKind::InvalidFormat, &error.to_string())
-    }
-}
 
 impl From<MacError> for VaultError {
     fn from(error: MacError) -> Self {

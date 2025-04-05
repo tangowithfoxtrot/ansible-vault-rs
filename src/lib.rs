@@ -25,14 +25,15 @@ mod errors;
 pub use crate::errors::VaultError;
 use crate::errors::*;
 use aes::Aes256;
-use cipher::{KeyIvInit, StreamCipher};
-use cipher::generic_array::GenericArray;
+use aes::cipher::{KeyIvInit, StreamCipher};
+use aes::cipher::generic_array::GenericArray;
 use ctr::Ctr128BE;
-use block_padding::{Padding, Pkcs7};
-use hmac::{Hmac, Mac, NewMac};
+use block_padding::{generic_array, Padding, Pkcs7};
+use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
 use rand::Rng;
 use sha2::Sha256;
+use generic_array::typenum::U16;
 use std::fs::File;
 use std::io::{BufRead, Read};
 use std::path::Path;
@@ -47,9 +48,9 @@ type HmacSha256 = Hmac<Sha256>;
 
 /// Verify vault data with derived key2 and hmac authentication
 fn verify_vault(key: &[u8], ciphertext: &[u8], crypted_hmac: &[u8]) -> Result<()> {
-    let mut hmac = HmacSha256::new_varkey(key)?;
+    let mut hmac = HmacSha256::new_from_slice(key)?;
     hmac.update(ciphertext);
-    Ok(hmac.verify(crypted_hmac)?)
+    Ok(hmac.verify(crypted_hmac.into())?)
 }
 
 /// Generate derived keys and initialization vector from given key and salt
@@ -58,7 +59,7 @@ fn generate_derived_key(
     salt: &[u8],
 ) -> ([u8; KEY_SIZE], [u8; KEY_SIZE], [u8; AES_BLOCK_SIZE]) {
     let mut hmac_buffer = [0; 2 * KEY_SIZE + AES_BLOCK_SIZE];
-    pbkdf2::<HmacSha256>(key.as_bytes(), salt, 10000, &mut hmac_buffer);
+    let _ = pbkdf2::<HmacSha256>(key.as_bytes(), salt, 10000, &mut hmac_buffer);
 
     let mut key1 = [0u8; KEY_SIZE];
     let mut key2 = [0u8; KEY_SIZE];
@@ -89,12 +90,12 @@ fn generate_derived_key(
 ///  assert_eq!("lipsum", decoded_str);
 /// ```
 pub fn decrypt<T: Read>(mut input: T, key: &str) -> Result<Vec<u8>> {
-    // read payload
+    // Read payload
     let mut payload = String::new();
     input.read_to_string(&mut payload)?;
     let unhex_payload = String::from_utf8(hex::decode(&payload)?)?;
 
-    // extract salt, hmac and crypted data
+    // Extract salt, HMAC, and ciphertext
     let mut lines = unhex_payload.lines();
     let salt = hex::decode(
         lines
@@ -112,20 +113,30 @@ pub fn decrypt<T: Read>(mut input: T, key: &str) -> Result<Vec<u8>> {
             .ok_or_else(|| VaultError::from_kind(ErrorKind::InvalidFormat))?,
     )?;
 
-    // check data integrity
+    // Verify data integrity
     let (key1, key2, iv) = &generate_derived_key(key, salt.as_slice());
     verify_vault(key2, &ciphertext, &hmac_verify)?;
 
-    // decrypt message
+    // Decrypt message
     let key_array = GenericArray::from_slice(key1);
     let iv_array = GenericArray::from_slice(iv);
     let mut cipher = Aes256Ctr::new(key_array, iv_array);
     cipher.apply_keystream(&mut ciphertext);
 
-    let n = Pkcs7::unpad(&ciphertext)?.len();
-    ciphertext.truncate(n);
+    // Ensure the ciphertext length is a multiple of the block size
+    if ciphertext.len() % AES_BLOCK_SIZE != 0 {
+        return Err(VaultError::from_kind(ErrorKind::InvalidFormat));
+    }
 
-    Ok(ciphertext)
+    // Convert ciphertext into blocks and unpad the last block
+    let last_block = GenericArray::<u8, U16>::from_slice(&ciphertext[ciphertext.len() - AES_BLOCK_SIZE..]);
+    let unpadded_last_block = Pkcs7::unpad(last_block).map_err(|_| VaultError::from_kind(ErrorKind::InvalidFormat))?;
+
+    // Combine unpadded last block with the rest of the ciphertext
+    let mut unpadded_data = ciphertext[..ciphertext.len() - AES_BLOCK_SIZE].to_vec();
+    unpadded_data.extend_from_slice(unpadded_last_block);
+
+    Ok(unpadded_data)
 }
 
 /// Decrypt an ansible vault formated stream
@@ -222,22 +233,21 @@ pub fn encrypt<T: Read>(mut input: T, key: &str) -> Result<String> {
     input.read_to_end(&mut buffer)?;
     let pos = buffer.len();
     let pad_len = AES_BLOCK_SIZE - (pos % AES_BLOCK_SIZE);
-    buffer.resize(pos + pad_len, 0);
-    let block_buffer = Pkcs7::pad(buffer.as_mut_slice(), pos, AES_BLOCK_SIZE)?;
+    buffer.resize(pos + pad_len, pad_len as u8); // PKCS#7 padding: each pad byte is the padding length
 
     // Derive cryptographic keys
-    let salt = rand::thread_rng().r#gen::<[u8; 32]>();
+    let salt = rand::rng().random::<[u8; 32]>();
     let (key1, key2, iv) = &generate_derived_key(key, &salt);
 
     // Encrypt data
     let key_array = GenericArray::from_slice(key1);
     let iv_array = GenericArray::from_slice(iv);
     let mut cipher = Aes256Ctr::new(key_array, iv_array);
-    cipher.apply_keystream(block_buffer);
+    cipher.apply_keystream(&mut buffer);
 
     // Message authentication
-    let mut mac = HmacSha256::new_varkey(key2)?;
-    mac.update(block_buffer);
+    let mut mac = HmacSha256::new_from_slice(key2)?;
+    mac.update(&buffer);
     let result = mac.finalize();
     let b_hmac = result.into_bytes();
 
@@ -246,7 +256,7 @@ pub fn encrypt<T: Read>(mut input: T, key: &str) -> Result<String> {
         "{}\n{}\n{}",
         hex::encode(salt),
         hex::encode(b_hmac),
-        hex::encode(block_buffer)
+        hex::encode(&buffer)
     );
 
     Ok(hex::encode(ciphertext))
