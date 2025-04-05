@@ -2,10 +2,10 @@
 name = "ansible-vault"
 description = "encrypt and decrypt ansible vault"
 version = "0.2.1"
-authors = ["Wouter Geraedts <wouter@tweedegolf.com>", "darlaam <darlaam@pm.me>"]
+authors = ["tangowithfoxtrot <facial.outboard349@addy.io>"]
 edition = "2018"
 license = "MIT"
-repository = "https://github.com/tweedegolf/ansible-vault-rs"
+repository = "https://github.com/tangowithfoxtrot/ansible-vault-rs"
 keywords = ["ansible", "crypto"]
 categories = ["cryptography", "encoding"]
 
