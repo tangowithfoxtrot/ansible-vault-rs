@@ -44,7 +44,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// Verify vault data with derived key2 and hmac authentication
 fn verify_vault(key: &[u8], ciphertext: &[u8], crypted_hmac: &[u8]) -> Result<()> {
     let mut hmac = HmacSha256::new_varkey(key)?;
-    hmac.update(&ciphertext);
+    hmac.update(ciphertext);
     Ok(hmac.verify(crypted_hmac)?)
 }
 
@@ -93,17 +93,17 @@ pub fn decrypt<T: Read>(mut input: T, key: &str) -> Result<Vec<u8>> {
     // extract salt, hmac and crypted data
     let mut lines = unhex_payload.lines();
     let salt = hex::decode(
-        &lines
+        lines
             .next()
             .ok_or_else(|| VaultError::from_kind(ErrorKind::InvalidFormat))?,
     )?;
     let hmac_verify = hex::decode(
-        &lines
+        lines
             .next()
             .ok_or_else(|| VaultError::from_kind(ErrorKind::InvalidFormat))?,
     )?;
     let mut ciphertext = hex::decode(
-        &lines
+        lines
             .next()
             .ok_or_else(|| VaultError::from_kind(ErrorKind::InvalidFormat))?,
     )?;
@@ -216,7 +216,7 @@ pub fn encrypt<T: Read>(mut input: T, key: &str) -> Result<String> {
     let pos = buffer.len();
     let pad_len = AES_BLOCK_SIZE - (pos % AES_BLOCK_SIZE);
     buffer.resize(pos + pad_len, 0);
-    let mut block_buffer = Pkcs7::pad(buffer.as_mut_slice(), pos, AES_BLOCK_SIZE)?;
+    let block_buffer = Pkcs7::pad(buffer.as_mut_slice(), pos, AES_BLOCK_SIZE)?;
 
     // Derive cryptographic keys
     let salt = rand::thread_rng().gen::<[u8; 32]>();
@@ -224,7 +224,7 @@ pub fn encrypt<T: Read>(mut input: T, key: &str) -> Result<String> {
 
     // Encrypt data
     let mut cipher = Aes256Ctr::new_var(key1, iv)?;
-    cipher.apply_keystream(&mut block_buffer);
+    cipher.apply_keystream(block_buffer);
 
     // Message authentication
     let mut mac = HmacSha256::new_varkey(key2)?;
@@ -287,5 +287,4 @@ mod tests {
         let decoded_str = String::from_utf8(decoded).unwrap();
         assert_eq!(lipsum, decoded_str);
     }
-
 }
