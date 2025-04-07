@@ -219,16 +219,15 @@ fn main() -> Result<()> {
                 verbose: _,
                 command,
             } => {
-                let mut decryption_password = String::new();
-
-                if !vault_password_file.is_empty() {
-                    // TODO: figure out how this is supposed to work. this is probably wrong.
-                    // I haven't actually used multiple password files.
-                    // TODO: support interpreting password files as scripts
-                    for file in vault_password_file {
-                        decryption_password = fs::read_to_string(Path::new(&file))?;
-                    }
-                }
+                let mut decryption_password = if !vault_password_file.is_empty() {
+                    let file_path = Path::new(vault_password_file[0].as_str()); // fix this to whatever you decide
+                    let Ok(decryption_password) = get_password_from_file(file_path) else {
+                        bail!("Couldn't get the password from the file");
+                    };
+                    decryption_password
+                } else {
+                    String::new()
+                };
 
                 if ask_vault_password {
                     decryption_password = rpassword::prompt_password("Vault password: ")?;
@@ -265,4 +264,11 @@ fn main() -> Result<()> {
         };
     }
     Ok(())
+}
+
+fn get_password_from_file(file: &Path) -> std::result::Result<String, String> {
+    match fs::read_to_string(file) {
+        Ok(s) => Ok(s),
+        Err(e) => Err(e.to_string()),
+    }
 }
